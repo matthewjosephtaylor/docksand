@@ -1,0 +1,78 @@
+#!/bin/bash
+set -e
+CSD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+source ${CSD}/functions.sh
+
+SANDBOX_ENTRYPOINT="/bin/bash"
+SANDBOX_WORKDIR="/sandbox"
+BASE_IMAGE_ROOT="ubuntu:latest"
+
+
+function usage_and_exit () {
+	echo "Docker Sandboxing Tool"
+	echo "Usage: `basename $0` \
+[repository[:tag]] \
+[-h | --help] \
+[-l | --list] \
+[-rm | --remove] \
+[-sh | --shell] \
+[-w | --workdir] \
+"
+	exit 0;
+}
+
+function list_sandbox_and_exit () {
+	echo "Sandbox Images:";
+	list_sandbox_images;
+	echo "Sandbox Container:";
+	list_sandbox_container;
+	exit 0;
+}
+
+function remove_sandbox_and_exit () {
+	remove_sandbox;
+	exit 0;
+}
+
+args=("$@")
+
+for i in "${!args[@]}"; do
+    case "${args[$i]}" in
+    -h|--help)
+	 		usage_and_exit;
+            ;;
+    -l|--list)
+			list_sandbox_and_exit;
+            ;;
+    -rm|--remove)
+			remove_sandbox_and_exit;
+            ;;
+    -sh|--shell)
+			SANDBOX_ENTRYPOINT="${args[$i +1]}"
+            ;;
+    -w|--workdir)
+			SANDBOX_WORKDIR="${args[$i +1]}"
+            ;;
+    esac
+done
+
+if [[ $# -gt 0 ]]; then
+	remove_sandbox
+	BASE_IMAGE_ROOT=$1
+fi
+
+
+function main () {
+	(
+		set -e
+		if sandbox_container_exists; then
+			create_new_sandbox_image >/dev/null
+			remove_sandbox_container >/dev/null
+		fi
+		create_new_sandbox_container >/dev/null
+		start_sandbox_container
+	)
+}
+
+main
