@@ -26,7 +26,7 @@ function list_sandbox_images () {
 }
 
 function list_sandbox_container () {
-	docker ps -a --filter "name=$(get_sandbox_name)"
+	docker ps -a --filter "name=^/$(get_sandbox_name)$"
 }
 
 function get_base_image_root () {
