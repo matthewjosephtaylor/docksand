@@ -65,7 +65,7 @@ function get_image_workdir () {
 function create_new_sandbox_container () {
 	local sandbox_image_tag=$(get_most_recent_sandbox_image_tag);
 	local sandbox_workdir=$(get_image_workdir ${sandbox_image_tag})
-	docker create -it -e HOME='/sandbox' -v "$(pwd):/${sandbox_workdir}" --name "$(get_sandbox_name)" "${sandbox_image_tag}"
+	docker create -it -e HOME='/sandbox' --hostname="${sandbox_image_tag}" -v "$(pwd):/${sandbox_workdir}" --name "$(get_sandbox_name)" "${sandbox_image_tag}"
 }
 
 function remove_sandbox_images () {
