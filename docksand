@@ -2,11 +2,18 @@
 # Docker Sandbox Tool
 # blame: Matt taylor https://github.com/matthewjosephtaylor
 
-set -e
+# There are multiple 'modules' built into this one shell script. 
+# The core 'docksand' module is responsible for creating/maintaining the individual docker 'sandbox' containers
+# The 'cmd-find' module creates the utility image that is responsible for crafting the 'apt-get' for the sandbox container
+# The 'command-composition' module uses 'cmd-find' and is responsible for creating/maintain the 'command composition' images
 
+#--------docksand module begin---------------
+
+# these are the default settings and must be 'globally mutable' so they can be modified via command-line params
 SANDBOX_ENTRYPOINT="/bin/bash"
 SANDBOX_WORKDIR="/sandbox"
 BASE_IMAGE_ROOT="ubuntu:latest"
+SANDBOX_IMAGE_COMMANDS=()
 
 function sandbox_container_exists () {
 	docker inspect "$(get_sandbox_name)" 2>/dev/null 1>/dev/null
@@ -96,13 +103,15 @@ function remove_sandbox () {
 function usage_and_exit () {
 	echo "Docker Sandboxing Tool"
 	echo "Usage: `basename $0` \
-[repository[:tag]] \
+[-b | --base repository[:tag]] \
+[-c | --commands 'cmd1[:spec] cmd2[:spec] ...'] \
 [-h | --help] \
 [-l | --list] \
 [-rm | --remove] \
 [-sh | --shell] \
 [-w | --workdir] \
 "
+	echo "Example: `basename $0` -c 'java:8 ping:ip' "
 	exit 0;
 }
 
@@ -118,7 +127,140 @@ function remove_sandbox_and_exit () {
 	remove_sandbox;
 	exit 0;
 }
+#--------docksand module end---------------
 
+#---------begin command-composition module----------
+image_name () {
+        echo "cmdcomp-$@"  | sed 's/[^a-zA-Z0-9_-]//g'
+}
+
+create_command_composition_image () {
+    package_install_list=$(docker run --rm ubuntu-cmd-find:latest $@)
+    if [ $? -ne 0 ]; then
+        echo "error creating command-composition image: ${package_install_list}"
+        exit 1
+    fi
+
+    docker build -t "$(image_name $@)" -<<EOF
+FROM ubuntu:latest
+RUN ${package_install_list}
+EOF
+
+}
+
+#---------end command-composition module----------
+
+#------------cmd-find module begin------------------
+
+cmd_finder_image_exists () {
+    docker inspect --type image "ubuntu-cmd-find:latest" 2>/dev/null 1>/dev/null
+}
+
+build_cmd_finder_image () {
+    if cmd_finder_image_exists; then 
+        return 0
+    fi
+    read -r -d '' cmd_fnd_plain <<'EOF'
+#!/usr/bin/env bash
+
+function join_by { local IFS="$1"; shift; echo "$*"; }
+
+# Some:<value> | Error:<error>
+candidates () {
+    local -r search_term=$1
+    local -r decomposed_search=(${search_term//:/ })
+    local -r pkgs=($(/usr/lib/command-not-found "${decomposed_search[0]}" 2>&1 | grep '^apt install' | sed 's/^apt install //g' | grep "${decomposed_search[1]}"))
+    local -r pkgs_length="${#pkgs[@]}"
+    if (( pkgs_length > 1)); then
+        local -r pkgs_joined=$(printf ",%s" "${pkgs[@]}")
+        echo -e "Error:$(echo ${search_term} | base64):<many-packages-found>:${pkgs_joined:1}"
+    fi
+    if (( pkgs_length == 0)); then
+        local -r pa=($(/usr/lib/command-not-found --ignore-installed "${decomposed_search[0]}" 2>&1 | grep 'Command .* is available in'))
+        local -r pa_length="${#pa[@]}"
+        if (( pa_length == 0 )); then
+            echo -e "Error:$(echo ${search_term} | base64):<no-packages-found>"
+            exit 1
+        fi
+    fi
+    if (( pkgs_length == 1)); then
+        echo -e "Some:${pkgs[0]}"
+    fi
+}
+
+halt_on_error () {
+    local -r test_value=$1
+    # echo "testing: ${test_value}"
+    local -r decomposed=(${test_value//:/ })
+    if [ "${decomposed[0]}" = "Error" ]; then
+        echo "'$(echo ${decomposed[1]} | base64 -d)' ${decomposed[2]}"
+        local -r possibles="${decomposed[3]}"
+        local -r possibles_arr=(${possibles//,/ })
+        for i in "${possibles_arr[@]}"
+        do
+            echo "      $i"
+        done
+        exit 1
+    fi
+
+}
+
+install_package_cmd () {
+    local -r some_package=$1
+    local -r decomposed=(${some_package//:/ })
+    if [ "${decomposed[0]}" = "Some" ]; then
+        echo -e "${decomposed[1]}"
+    fi
+
+}
+
+#---------------- Main ----------------------
+
+# build up candidate packages
+packages=()
+for st in "$@"
+do
+    packages+=($(candidates "${st}"))
+done
+
+# check for errors in candidates
+for v in "${packages[@]}"
+do
+    # echo "v: $v"
+    halt_on_error $v
+done
+
+# grab successful candidates
+successful_packages=()
+for v in "${packages[@]}"
+do
+    # echo "v: $v"
+    successful_packages+=($(install_package_cmd "${v}"))
+    # install_package_cmd $v
+done
+
+# it all led to this point :)
+echo "apt-get update && apt-get install -y ${successful_packages[@]}"
+EOF
+
+
+    local -r cmd_fnd_base64=$(echo "${cmd_fnd_plain}" | base64)
+
+
+    docker build -t "ubuntu-cmd-find:latest" -<<EOF
+FROM ubuntu:latest
+RUN apt-get update && apt-get install -y command-not-found
+RUN mkdir /app
+WORKDIR /app
+RUN echo "${cmd_fnd_base64}" | base64 -d > /app/cmd-find
+RUN chmod 775 /app/cmd-find
+ENTRYPOINT ["/app/cmd-find"]
+EOF
+
+}
+#------------cmd-find module end------------------
+
+#-------main module begin--------------
 args=("$@")
 
 for i in "${!args[@]}"; do
@@ -138,17 +280,30 @@ for i in "${!args[@]}"; do
     -w|--workdir)
 			SANDBOX_WORKDIR="${args[$i +1]}"
             ;;
+    -c|--commands)
+			SANDBOX_IMAGE_COMMANDS=("${args[$i +1]}")
+            ;;
+    -b|--base)
+			BASE_IMAGE_ROOT="${args[$i +1]}"
+            ;;
     esac
 done
 
 if [[ $# -gt 0 ]]; then
 	remove_sandbox
-	BASE_IMAGE_ROOT=$1
 fi
 
 
-function main () {
+main () {
 	(
+    	local -r commands_length="${#SANDBOX_IMAGE_COMMANDS[@]}"
+		if (( commands_length > 0 )); then
+			build_cmd_finder_image
+			create_command_composition_image ${SANDBOX_IMAGE_COMMANDS[@]}
+			BASE_IMAGE_ROOT="$(image_name ${SANDBOX_IMAGE_COMMANDS[@]})"
+		fi
+
+
 		set -e
 		if sandbox_container_exists; then
 			create_new_sandbox_image >/dev/null
@@ -158,5 +313,6 @@ function main () {
 		start_sandbox_container
 	)
 }
+#-------main module end--------------
 
 main
