@@ -11,7 +11,9 @@
 
 # these are the default settings and must be 'globally mutable' so they can be modified via command-line params
 SANDBOX_ENTRYPOINT="/bin/bash"
-SANDBOX_WORKDIR="/sandbox"
+#SANDBOX_WORKDIR="/sandbox"
+SANDBOX_WORKDIR="${PWD}"
+SANDBOX_HOSTNAME="docksand-${PWD##*/}"
 BASE_IMAGE_ROOT="ubuntu:latest"
 SANDBOX_IMAGE_COMMANDS=()
 
@@ -72,7 +74,7 @@ function get_image_workdir () {
 function create_new_sandbox_container () {
 	local sandbox_image_tag=$(get_most_recent_sandbox_image_tag);
 	local sandbox_workdir=$(get_image_workdir ${sandbox_image_tag})
-	docker create -it -e HOME='/sandbox' --hostname="${sandbox_image_tag}" -v "$(pwd):/${sandbox_workdir}" --name "$(get_sandbox_name)" "${sandbox_image_tag}"
+	docker create -it -e 'PS1="\u@docksand:\w\$"' -e "HOME=${sandbox_workdir}" --hostname="${SANDBOX_HOSTNAME}" -v "$(pwd):/${sandbox_workdir}" --name "$(get_sandbox_name)" "${sandbox_image_tag}"
 }
 
 function remove_sandbox_images () {

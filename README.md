@@ -38,6 +38,9 @@ OpenJDK 64-Bit Server VM (build 25.191-b12, mixed mode)
 root@docksand-users-bob-experiment:1548655778:~#
 ```
 
+NOTE: when specifying `commands` above one can append `:{regex-search}` to specify a package if the command is available in more than one package. Example: `ping:ip` specifies the usage of the `iputils-ping` package.
+
+
 This will spin up a docker container that will 'wrap around' your current working
 directory by mounting it as a volume inside the container.
 
