@@ -15,7 +15,6 @@ SANDBOX_ENTRYPOINT="/bin/bash"
 SANDBOX_WORKDIR="${PWD}"
 SANDBOX_HOSTNAME="docksand-${PWD##*/}"
 BASE_IMAGE_ROOT="ubuntu:latest"
-DOCKER_OPTS=""
 SANDBOX_IMAGE_COMMANDS=()
 
 function sandbox_container_exists () {
@@ -75,7 +74,7 @@ function get_image_workdir () {
 function create_new_sandbox_container () {
 	local sandbox_image_tag=$(get_most_recent_sandbox_image_tag);
 	local sandbox_workdir=$(get_image_workdir ${sandbox_image_tag})
-  docker create "${DOCKER_OPTS}" -it -e 'PS1="\u@docksand:\w\$"' -e "HOME=${sandbox_workdir}" --hostname="${SANDBOX_HOSTNAME}" -v "$(pwd):/${sandbox_workdir}" --name "$(get_sandbox_name)" "${sandbox_image_tag}"
+    docker create ${DOCKER_OPTS:+"${DOCKER_OPTS}"} -it -e 'PS1="\u@docksand:\w\$"' -e "HOME=${sandbox_workdir}" --hostname="${SANDBOX_HOSTNAME}" -v "$(pwd):/${sandbox_workdir}" --name "$(get_sandbox_name)" "${sandbox_image_tag}"
 }
 
 function remove_sandbox_images () {
