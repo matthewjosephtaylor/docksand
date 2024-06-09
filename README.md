@@ -5,8 +5,7 @@ container but the working directory is on the host.
 
 Useful for experimentation, creating a repeatable development environment, and running code one doesn't fully trust.  
 
-Each sandbox is tied to the current working directory where the 'docksand' command
-is run from. The HOME directory inside the container corresponds to the directory from which the 'docksand' command was run.
+Each sandbox is tied to the current working directory where the 'docksand' command is run from. The HOME directory inside the container corresponds to the directory from which the 'docksand' command was run.
 
 ## Installation
 
@@ -51,17 +50,13 @@ Changes to the 'container OS' will be preserved.
 Exit the shell when you are done playing.
 
 Run 'docksand' command from the same directory to re-enter the same sandbox with
-all of your OS changes intact (Note: when you exit the sandbox shell the container
-stops as well).
+all of your OS changes intact (Note: when you exit the sandbox shell the container stops as well).
 
-A new image is created each time the docksand command is run based on the previous
-container, so there is a running history of each of your 'sandboxing sessions',
-should you ever wish to go back to a previous one.
-(see `docksand --list` for the full list of containers and images)
+A new image is created each time the docksand command is run based on the previous container, so there is a running history of each of your 'sandboxing sessions', should you ever wish to go back to a previous one.  (see `docksand --list` for the full list of containers and images)
 
 If you tire of the sandbox run `docksand --remove` to remove all sandbox images and containers associated with the current directory.
 
-Run 'docksand --help' for full list of everything this baby can do.
+Run `docksand --help` for full list of everything this baby can do.
 
 NOTE: Running `docksand -b somerepository:sometag` or `docsand -c some-command` will REMOVE all previous sandbox history associated with the current directory.
 
@@ -80,6 +75,7 @@ NOTE: Running `docksand -b somerepository:sometag` or `docsand -c some-command` 
 ## Change History
 
 - 2019-Jan-27 : added ability to 'compose commands' via `-c 'cmd1 cmd2 ...'`.
+- 2024-Jun-9 : added `-o`, `--options` to add flags directly to 'docker create' when creating the container.
 
 
 ## License
